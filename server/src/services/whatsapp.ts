@@ -28,15 +28,18 @@ export async function createSession(prisma: PrismaClient) {
   const client = new Client({
     authStrategy: new LocalAuth({
       clientId: sessionId,
-      dataPath: './.wwebjs_auth',
+      dataPath: ".wwebjs_auth",
     }),
+  
     puppeteer: {
+      executablePath: process.env.CHROME_PATH || "/usr/bin/chromium",
       headless: true,
       args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
       ],
-    },
+    }
   });
 
   const session: WhatsAppSession = {
