@@ -64,143 +64,156 @@ export async function whatsappRoutes(fastify: FastifyInstance) {
   });
 
   // GET /api/whatsapp/session/:sessionId/events
-  fastify.get<{ Params: { sessionId: string }}>('/session/:sessionId/events', async (request, reply) => {
-    
-    const { sessionId } = request.params;
+  fastify.get<{ Params: { sessionId: string } }>(
+    '/session/:sessionId/events',
+    async (request, reply) => {
+      const { sessionId } = request.params;
 
-    const session = getSession(sessionId);
+      const session = getSession(sessionId);
 
-    if (!session) {
-      return reply.code(404).send({
-        message: 'WhatsApp session not found.',
-      });
-    }
+      if (!session) {
+        return reply.code(404).send({
+          message: 'WhatsApp session not found.',
+        });
+      }
 
-    // Take control of the response
-    reply.hijack();
+      // Take control of the response
+      reply.hijack();
 
-    // CORS
-    reply.raw.setHeader(
-      'Access-Control-Allow-Origin',
-      'http://localhost:3000'
-    );
+      // -------------------------
+      // CORS
+      // -------------------------
 
-    reply.raw.setHeader(
-      'Access-Control-Allow-Methods',
-      'GET, POST, OPTIONS'
-    );
+      const origin = request.headers.origin;
 
-    reply.raw.setHeader(
-      'Access-Control-Allow-Headers',
-      'Content-Type'
-    );
+      const allowedOrigins = [
+        'http://localhost:3000',
+        'https://phoneo-xi.vercel.app',
+      ];
 
-    // SSE headers
-    reply.raw.setHeader(
-      'Content-Type',
-      'text/event-stream; charset=utf-8'
-    );
-
-    reply.raw.setHeader(
-      'Cache-Control',
-      'no-cache, no-transform'
-    );
-
-    reply.raw.setHeader(
-      'Connection',
-      'keep-alive'
-    );
-
-    reply.raw.setHeader(
-      'X-Accel-Buffering',
-      'no'
-    );
-
-    reply.raw.flushHeaders();
-
-    console.log(
-      `SSE connected for session: ${sessionId}`
-    );
-
-    // Initial SSE message
-    reply.raw.write(': connected\n\n');
-
-    // Register browser
-    addClient(
-      sessionId,
-      reply.raw
-    );
-
-    // SEND CURRENT STATE
-
-    if (
-      session.status === 'qr' &&
-      session.qr
-    ) {
-      reply.raw.write(
-        `event: qr\n` +
-        `data: ${JSON.stringify({
-          qr: session.qr,
-        })}\n\n`
-      );
-    }
-
-    if (
-      session.status === 'connecting'
-    ) {
-      reply.raw.write(
-        `event: connecting\n` +
-        `data: {}\n\n`
-      );
-    }
-
-    if (
-      session.status === 'connected'
-    ) {
-      reply.raw.write(
-        `event: connected\n` +
-        `data: ${JSON.stringify({
-          phoneNumber:
-            session.phoneNumber,
-        })}\n\n`
-      );
-    }
-
-    if (
-      session.status === 'failed'
-    ) {
-      reply.raw.write(
-        `event: failed\n` +
-        `data: ${JSON.stringify({
-          message:
-            'WhatsApp connection failed.',
-        })}\n\n`
-      );
-    }
-
-    // HEARTBEAT
-
-    const heartbeat = setInterval(() => {
-      if (!reply.raw.destroyed) {
-        reply.raw.write(
-          ': heartbeat\n\n'
+      if (origin && allowedOrigins.includes(origin)) {
+        reply.raw.setHeader(
+          'Access-Control-Allow-Origin',
+          origin
         );
       }
-    }, 15000);
 
-    // DISCONNECT
-
-    request.raw.on('close', () => {
-      console.log(
-        `SSE disconnected: ${sessionId}`
+      reply.raw.setHeader(
+        'Access-Control-Allow-Methods',
+        'GET, POST, OPTIONS'
       );
 
-      clearInterval(heartbeat);
+      reply.raw.setHeader(
+        'Access-Control-Allow-Headers',
+        'Content-Type, Authorization'
+      );
 
-      removeClient(
+      // -------------------------
+      // SSE headers
+      // -------------------------
+
+      reply.raw.setHeader(
+        'Content-Type',
+        'text/event-stream; charset=utf-8'
+      );
+
+      reply.raw.setHeader(
+        'Cache-Control',
+        'no-cache, no-transform'
+      );
+
+      reply.raw.setHeader(
+        'Connection',
+        'keep-alive'
+      );
+
+      reply.raw.setHeader(
+        'X-Accel-Buffering',
+        'no'
+      );
+
+      reply.raw.flushHeaders();
+
+      console.log(
+        `SSE connected for session: ${sessionId}`
+      );
+
+      // Initial SSE message
+      reply.raw.write(': connected\n\n');
+
+      // Register browser
+      addClient(
         sessionId,
         reply.raw
       );
-    });
-  });
+
+      // -------------------------
+      // SEND CURRENT STATE
+      // -------------------------
+
+      if (
+        session.status === 'qr' &&
+        session.qr
+      ) {
+        reply.raw.write(
+          `event: qr\n` +
+          `data: ${JSON.stringify({
+            qr: session.qr,
+          })}\n\n`
+        );
+      }
+
+      if (session.status === 'connecting') {
+        reply.raw.write(
+          `event: connecting\n` +
+          `data: {}\n\n`
+        );
+      }
+
+      if (session.status === 'connected') {
+        reply.raw.write(
+          `event: connected\n` +
+          `data: ${JSON.stringify({
+            phoneNumber: session.phoneNumber,
+          })}\n\n`
+        );
+      }
+
+      if (session.status === 'failed') {
+        reply.raw.write(
+          `event: failed\n` +
+          `data: ${JSON.stringify({
+            message: 'WhatsApp connection failed.',
+          })}\n\n`
+        );
+      }
+
+      // -------------------------
+      // HEARTBEAT
+      // -------------------------
+
+      const heartbeat = setInterval(() => {
+        if (!reply.raw.destroyed) {
+          reply.raw.write(': heartbeat\n\n');
+        }
+      }, 15000);
+
+      // -------------------------
+      // DISCONNECT
+      // -------------------------
+
+      request.raw.on('close', () => {
+        console.log(
+          `SSE disconnected: ${sessionId}`
+        );
+
+        clearInterval(heartbeat);
+
+        removeClient(
+          sessionId,
+          reply.raw
+        );
+      });
+    }
+  );
 }
