@@ -1,0 +1,29 @@
+# Dependencies
+**/node_modules/
+
+# Environment variables
+**/.env
+**/.env.*
+
+# Next.js
+**/.next/
+
+# Build output
+**/dist/
+**/build/
+
+# WhatsApp Web.js
+**/.wwebjs_auth/
+**/.wwebjs_cache/
+
+# Prisma generated
+**/src/generated/prisma/
+
+# Logs
+**/*.log
+
+# Coverage
+**/coverage/
+
+# OS
+.DS_Store
