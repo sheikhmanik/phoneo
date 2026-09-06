@@ -15,7 +15,10 @@ const app = Fastify({
 });
 
 app.register(fastifyCors, {
-  origin: true,
+  origin: [
+    'http://localhost:3000',
+    'https://phoneo-xi.vercel.app',
+  ],
   methods: [
     'GET',
     'POST',
