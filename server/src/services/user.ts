@@ -4,13 +4,25 @@ export async function ensureUser(
   prisma: PrismaClient,
   phone: string
 ) {
-  return prisma.user.upsert({
-    where: {
-      phone,
-    },
-    update: {},
-    create: {
-      phone,
-    },
+  const existingUser = await prisma.user.findUnique({
+    where: { phone },
   });
+
+  if (existingUser) {
+    return existingUser;
+  }
+
+  try {
+    return await prisma.user.create({
+      data: { phone },
+    });
+  } catch (error: any) {
+    if (error.code === 'P2002') {
+      return prisma.user.findUniqueOrThrow({
+        where: { phone },
+      });
+    }
+
+    throw error;
+  }
 }

@@ -32,12 +32,11 @@ export async function createSession(prisma: PrismaClient) {
     }),
   
     puppeteer: {
-      executablePath: process.env.CHROME_PATH || "/usr/bin/chromium",
       headless: true,
+      executablePath: '/usr/bin/chromium',
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
       ],
     }
   });
@@ -77,15 +76,59 @@ export async function createSession(prisma: PrismaClient) {
    * AUTHENTICATED
    *
    * The phone successfully scanned the QR.
-   */
-  client.on('authenticated', () => {
-    console.log(
-      `WhatsApp authenticated: ${sessionId}`
-    );
+  */
 
-    updateSession(sessionId, {
-      status: 'connecting',
-    });
+  client.on('loading_screen', (percent, message) => {
+    console.log(
+      `⏳ WhatsApp loading: ${percent}% - ${message}`
+    );
+  });
+  
+  client.on('change_state', (state) => {
+    console.log(`🔄 WhatsApp state: ${state}`);
+  });
+  
+  client.on('ready', () => {
+    console.log(`🎉🎉🎉 WHATSAPP READY: ${sessionId}`);
+  });
+
+  let connectedHandled = false;
+
+  const markConnected = async () => {
+    if (connectedHandled) {
+      return;
+    }
+
+    connectedHandled = true;
+
+    await handleConnected(
+      sessionId,
+      client,
+      prisma
+    );
+  };
+
+  client.on('authenticated', async () => {
+    console.log(
+      `✅ AUTHENTICATED: ${sessionId}`
+    );
+  
+    try {
+      const state = await client.getState();
+  
+      console.log(
+        `📡 STATE AFTER AUTH: ${state}`
+      );
+  
+      if (state === 'CONNECTED') {
+        await markConnected();
+      }
+    } catch (error) {
+      console.error(
+        'Failed to check WhatsApp state:',
+        error
+      );
+    }
   });
 
   /*
@@ -95,50 +138,15 @@ export async function createSession(prisma: PrismaClient) {
    */
   client.on('ready', async () => {
     console.log(
-      `WhatsApp connected: ${sessionId}`
+      `🎉 WHATSAPP READY: ${sessionId}`
     );
   
-    const phoneNumber =
-      client.info?.wid?.user;
-  
-    if (!phoneNumber) {
-      console.error(
-        `Could not determine WhatsApp phone number: ${sessionId}`
-      );
-  
-      updateSession(sessionId, {
-        status: 'failed',
-      });
-  
-      return;
-    }
-  
-    const formattedPhone =
-      `+${phoneNumber}`;
-  
-    try {
-      await ensureUser(prisma, formattedPhone);
-  
-      console.log(
-        `User verified/created: ${formattedPhone}`
-      );
-    } catch (error) {
-      console.error(
-        `Failed to create/find user: ${formattedPhone}`,
-        error
-      );
-  
-      updateSession(sessionId, {
-        status: 'failed',
-      });
-  
-      return;
-    }
-  
-    updateSession(sessionId, {
-      status: 'connected',
-      phoneNumber: formattedPhone,
-    });
+    await markConnected();
+
+    console.log(
+      'Client info immediately after authentication:',
+      client.info
+    );
   });
 
   /*
@@ -353,5 +361,88 @@ function sendState(
         message: 'WhatsApp connection failed.',
       })}\n\n`
     );
+  }
+}
+
+async function waitForClientInfo(
+  client: Client,
+  maxAttempts = 20
+) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (client.info?.wid?.user) {
+      return client.info;
+    }
+
+    console.log(
+      `Waiting for WhatsApp client info... attempt ${attempt}/${maxAttempts}`
+    );
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, 1000)
+    );
+  }
+
+  return null;
+}
+
+async function handleConnected(
+  sessionId: string,
+  client: Client,
+  prisma: PrismaClient
+) {
+  console.log(`🎉 WhatsApp connected: ${sessionId}`);
+
+  const info = await waitForClientInfo(client);
+
+  if (!info?.wid?.user) {
+    console.error(
+      `❌ WhatsApp connected but phone number is unavailable: ${sessionId}`
+    );
+
+    updateSession(sessionId, {
+      status: 'failed',
+    });
+
+    return;
+  }
+
+  const formattedPhone = `+${info.wid.user}`;
+
+  console.log(
+    `📱 WhatsApp phone: ${formattedPhone}`
+  );
+
+  try {
+    const user = await ensureUser(
+      prisma,
+      formattedPhone
+    );
+
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        clientId: sessionId,
+      },
+    });
+
+    console.log(
+      `✅ User verified/created: ${formattedPhone}`
+    );
+
+    updateSession(sessionId, {
+      status: 'connected',
+      phoneNumber: formattedPhone,
+    });
+  } catch (error) {
+    console.error(
+      `❌ Failed to create/find user: ${formattedPhone}`,
+      error
+    );
+
+    updateSession(sessionId, {
+      status: 'failed',
+    });
   }
 }
