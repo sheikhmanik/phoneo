@@ -37,7 +37,11 @@ export async function createSession(prisma: PrismaClient) {
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",   // <-- add this
+        "--disable-gpu",
+        "--disable-accelerated-2d-canvas",
       ],
+      timeout: 60000, // give it more breathing room than the 30s default
     }
   });
 
