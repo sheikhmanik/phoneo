@@ -113,25 +113,25 @@ export async function createSession(prisma: PrismaClient) {
   };
 
   client.on('authenticated', async () => {
-    console.log(
-      `✅ AUTHENTICATED: ${sessionId}`
-    );
+    console.log(`✅ AUTHENTICATED: ${sessionId}`);
+  
+    // QR was scanned successfully — move the UI off the QR
+    // screen and show a "connecting" loader immediately,
+    // even before `ready` fires.
+    updateSession(sessionId, {
+      status: 'connecting',
+    });
   
     try {
       const state = await client.getState();
   
-      console.log(
-        `📡 STATE AFTER AUTH: ${state}`
-      );
+      console.log(`📡 STATE AFTER AUTH: ${state}`);
   
       if (state === 'CONNECTED') {
         await markConnected();
       }
     } catch (error) {
-      console.error(
-        'Failed to check WhatsApp state:',
-        error
-      );
+      console.error('Failed to check WhatsApp state:', error);
     }
   });
 
