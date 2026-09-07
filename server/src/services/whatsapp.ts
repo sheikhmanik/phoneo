@@ -41,7 +41,7 @@ export async function createSession(prisma: PrismaClient) {
         "--disable-gpu",
         "--disable-accelerated-2d-canvas",
       ],
-      timeout: 60000, // give it more breathing room than the 30s default
+      timeout: 120000, // give it more breathing room than the 30s default
     }
   });
 
